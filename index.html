@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>受付ご案内</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+#idle{background:var(--blue);color:#fff;align-items:center;justify-content:center;text-align:center;padding:5vh 6vw}
+#idle .name{font-size:clamp(24px,4vw,40px);font-weight:700;opacity:.9}
+#idle .clock{font-size:clamp(72px,16vw,180px);font-weight:900;line-height:1.05;margin:2vh 0 1vh;font-variant-numeric:tabular-nums}
+#idle .date{font-size:clamp(20px,3vw,30px);opacity:.85}
+#idle .touch{margin-top:7vh;display:flex;flex-direction:column;align-items:center;gap:20px}
+#idle .touch b{font-size:clamp(28px,5vw,48px);font-weight:900}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:clamp(14px,2vw,28px)}
+.item{background:var(--card);border:2px solid var(--line);border-radius:28px;padding:clamp(22px,3vw,36px);text-align:left;display:flex;gap:22px;align-items:center;min-height:200px;box-shadow:0 6px 0 var(--line);transition:transform .08s}
+.item:active{transform:translateY(4px);box-shadow:0 2px 0 var(--line)}
+.item .ic{flex:none;width:84px;height:84px;border-radius:24px;display:grid;place-items:center;background:var(--blue);color:#fff}
+.item .ic svg{width:46px;height:46px}
+.item b{display:block;font-size:clamp(26px,3.2vw,38px);font-weight:900;line-height:1.25}
+.item small{display:block;font-size:clamp(17px,2vw,22px);color:var(--sub);margin-top:6px}
+.item.callme{background:var(--coral);border-color:var(--coral);color:#fff;box-shadow:0 6px 0 #b8452a}
+.item.callme .ic{background:#fff;color:var(--coral)}.item.callme small{color:#ffe6de}
+.steps{list-style:none;margin:0 auto;padding:0;display:grid;gap:16px;max-width:1000px}
+.steps li{display:grid;grid-template-columns:64px minmax(0,1fr);gap:18px;align-items:start;background:var(--card);border:2px solid var(--line);border-radius:22px;padding:22px 26px}
+.steps .n{width:64px;height:64px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:900}
+.steps b{display:block;font-size:1.45em;line-height:1.35;padding-top:8px}
+.steps p{margin:8px 0 0;font-size:1.15em}
+.metal{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:10px}
+.metal li{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:14px;background:#fdf0eb;border:2px solid #f3c9b4;font-weight:700;font-size:1.02em;line-height:1.35;grid-template-columns:none}
+.metal svg{flex:none;width:30px;height:30px;color:var(--red)}
+.note{max-width:1000px;margin:20px auto 0;padding:18px 24px;border-radius:18px;background:#fff6d9;border:2px solid #ecd27a;font-weight:700;display:flex;gap:14px;align-items:flex-start}
+.note svg{flex:none;width:30px;height:30px;color:#a87400;margin-top:2px}
+
+/* 設定画面 */
+#admin{z-index:5}
+#admin main{user-select:text;-webkit-user-select:text}
+.adm{max-width:900px;margin:0 auto;width:100%}
+.adm h2{font-size:22px;margin:28px 0 10px}
+.adm .hint{font-size:15px;color:var(--sub);margin:4px 0 12px}
+.fl{display:grid;gap:6px;margin-bottom:16px;font-size:17px;font-weight:700}
+.fl input,.fl textarea{font-family:inherit;font-size:17px;line-height:1.6;font-weight:500;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%}
+.fl textarea{min-height:110px;resize:vertical}
+.fl textarea.tall{min-height:260px}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:0 16px}
+.ed{border:2px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:16px;background:var(--card)}
+.ed-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.ed-h b{flex:1;font-size:19px}
+.sbtn{min-height:44px;min-width:44px;padding:0 14px;border-radius:12px;border:2px solid var(--line);background:var(--bg);font-size:16px;font-weight:700}
+.sbtn.del{color:var(--red)}
+.adm .actions{justify-content:flex-start}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:14px 26px;border-radius:999px;font-size:18px;display:none;z-index:30}
+#pinbox{background:rgba(20,30,45,.6);align-items:center;justify-content:center;z-index:25}
+#pinbox .card{background:var(--card);padding:28px;border-radius:24px;width:min(420px,90vw)}
+#pinbox input{font-size:28px;letter-spacing:.3em;text-align:center}
+</style>
+</head>
+<body>
+
+<section id="idle" class="screen on">
+  <div class="name" id="idleName"></div>
+  <div class="clock" id="clock">--:--</div>
+  <div class="date" id="date"></div>
+  <div class="touch">
+    <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5a2 2 0 0 1 4 0v5"/><path d="M13 10V8.5a2 2 0 0 1 4 0V11"/><path d="M17 10.5a2 2 0 0 1 4 0V15a7 7 0 0 1-7 7h-1.5a6 6 0 0 1-4.6-2.2L4.6 16a1.9 1.9 0 0 1 2.9-2.5L9 15"/></svg></div>
+    <b>画面にさわってください</b>
+  </div>
+</section>
+
+<section id="menu" class="screen">
+  <header><h1 id="menuName"></h1><button class="hbtn" id="voiceBtn">音声 オン</button></header>
+  <main><p class="lead">ご用件をえらんでください</p><div class="grid" id="grid"></div></main>
+  <footer><span></span><span id="t1"></span></footer>
+</section>
+
+<section id="guide" class="screen">
+  <header><button class="hbtn" data-go="menu">‹ もどる</button><h1 id="gTitle"></h1><button class="hbtn" id="readBtn">もう一度読む</button></header>
+  <main>
+    <ol class="steps" id="gSteps"></ol>
+    <div class="note" id="gNote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span id="gNoteText"></span></div>
+    <div class="actions">
+      <button class="big-btn primary" data-go="idle">わかりました</button>
+      <button class="big-btn coral" data-call>スタッフを呼ぶ</button>
+    </div>
+  </main>
+  <footer><span></span><span id="t2"></span></footer>
+</section>
+
+<section id="calling" class="screen">
+  <div class="center">
+    <div class="ring" id="callRing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></div>
+    <h2 id="callTitle"></h2>
+    <p id="callText"></p>
+    <div class="actions">
+      <button class="big-btn coral" id="againBtn" hidden>もう一度呼ぶ</button>
+      <button class="big-btn" id="closeBtn">とじる</button>
+    </div>
+  </div>
+</section>
+
+<section id="admin" class="screen">
+  <header><h1>設定（職員用）</h1><button class="hbtn" id="admClose">とじる</button></header>
+  <main><div class="adm">
+    <p class="hint">ここでの変更は、この端末のブラウザに保存されます（他の端末には反映されません）。</p>
+    <h2>基本</h2>
+    <div class="row2">
+      <label class="fl">クリニック名<input id="aName"></label>
+      <label class="fl">呼び出し場所の名前（通知に表示）<input id="aPlace"></label>
+    </div>
+    <label class="fl">通知のチャンネル名（ntfy の topic）<input id="aTopic" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <p class="hint">変えた場合は、スタッフのスマホの ntfy アプリにも同じ名前を登録し直してください。</p>
+    <div class="row2">
+      <label class="fl">操作がないとき最初の画面に戻るまで（秒）<input id="aIdle" type="number" inputmode="numeric" min="15" max="600"></label>
+      <label class="fl">「もう一度呼ぶ」を出すまで（秒）<input id="aWait" type="number" inputmode="numeric" min="30" max="900"></label>
+      <label class="fl">設定画面の暗証番号（空欄なら不要）<input id="aPin" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    </div>
+    <h2>メニュー</h2>
+    <p class="hint">手順は1行に1つ。「見出し|説明」と書くと説明を分けられます。行の頭に「・」を付けると、すぐ上の手順の一覧（金属類など）になります。</p>
+    <div id="aMenu"></div>
+    <div class="actions"><button class="sbtn" id="aAdd">＋ 案内メニューを追加</button></div>
+    <div class="actions">
+      <button class="big-btn primary" id="aSave">保存する</button>
+      <button class="big-btn" id="aReset">初期設定に戻す</button>
+    </div>
+    <details style="margin:32px 0 60px">
+      <summary style="font-weight:700;cursor:pointer;min-height:44px">設定を書き出す（config.js に貼り付けて全端末に反映したいとき）</summary>
+      <label class="fl" style="margin-top:12px"><textarea id="aExport" class="tall" readonly></textarea></label>
+      <button class="sbtn" id="aCopy">コピー</button>
+    </details>
+  </div></main>
+</section>
+
+<section id="pinbox" class="screen">
+  <div class="card">
+    <label class="fl">暗証番号<input id="pinIn" type="password" inputmode="numeric" autocomplete="off"></label>
+    <div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="big-btn primary" id="pinOk">開く</button><button class="big-btn" id="pinNo">やめる</button></div>
+  </div>
+</section>
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+{
+const BASE = window.KIOSK_CONFIG;
+const SKEY = 'clinicKiosk.settings.v2';
+let C = BASE;
+try { const sv = JSON.parse(localStorage.getItem(SKEY)); if (sv && sv.menu) C = Object.assign({}, BASE, sv) } catch (e) {}
+const PREVIEW = !!window.KIOSK_PREVIEW;
+const NTFY = 'https://ntfy.sh';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ICON = {
+  guide: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  call: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'
+};
+const NO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>';
+let cur = 'idle', lastAct = Date.now(), voice = true, curGuide = null;
+
+/* ---------- 画面・音声 ---------- */
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
+  cur = id; lastAct = Date.now();
+  if (id !== 'calling') stopListen();
+  if (id === 'idle') { try { speechSynthesis.cancel() } catch (e) {} }
+}
+function speak(t) {
+  if (!voice || !t) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP'; u.rate = .92;
+    const v = speechSynthesis.getVoices().find(v => (v.lang || '').startsWith('ja')); if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+let actx = null;
+function chime(done) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    (done ? [[660, 0], [880, .25]] : [[880, 0], [660, .3]]).forEach(([f, t]) => {
+      const o = actx.createOscillator(), g = actx.createGain(), n = actx.currentTime + t;
+      o.frequency.value = f; g.gain.setValueAtTime(0, n); g.gain.linearRampToValueAtTime(.25, n + .02); g.gain.exponentialRampToValueAtTime(.001, n + .9);
+      o.connect(g).connect(actx.destination); o.start(n); o.stop(n + 1);
+    });
+  } catch (e) {}
+}
+
+/* ---------- メニュー・案内 ---------- */
+function render() {
+  $('idleName').textContent = C.clinicName; $('menuName').textContent = C.clinicName;
+  $('grid').innerHTML = C.menu.map((m, i) => `<button class="item ${m.type === 'call' ? 'callme' : ''}" data-i="${i}">
+  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[m.type] || ICON.guide}</svg></span>
+  <span><b>${esc(m.title)}</b><small>${esc(m.sub)}</small></span></button>`).join('');
+}
+render();
+
+function openGuide(m) {
+  curGuide = m;
+  $('gTitle').textContent = m.title;
+  const st = m.steps || [];
+  $('gSteps').innerHTML = st.map((s, k) => `<li>
+    <span class="n">${k + 1}</span>
+    <div><b>${esc(s.h)}</b>${s.d ? `<p>${esc(s.d)}</p>` : ''}
+    ${s.list ? `<ul class="metal">${s.list.map(x => `<li>${NO}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></li>`).join('');
+  $('gNoteText').textContent = m.note || ''; $('gNote').style.display = m.note ? '' : 'none';
+  show('guide'); readGuide();
+}
+function readGuide() {
+  const m = curGuide; if (!m) return;
+  speak(m.title + 'へのご案内です。' + (m.steps || []).map((s, k) =>
+    (k + 1) + '。' + s.h + '。' + (s.d || '') + (s.list ? s.list.join('、') + '。' : '')).join('') + (m.note || ''));
+}
+
+/* ---------- スタッフ呼び出し（ntfy） ---------- */
+let listener = null, waitTimer = null, lastSent = 0, acked = false, callState = '';
+function stopListen() {
+  if (listener) { try { listener.close() } catch (e) {} listener = null }
+  if (waitTimer) { clearTimeout(waitTimer); waitTimer = null }
+}
+function setCall(state, title, text) {
+  callState = state;
+  $('callRing').classList.toggle('done', state === 'ack');
+  $('callTitle').textContent = title; $('callText').textContent = text;
+  $('againBtn').hidden = state !== 'wait';
+}
+async function sendCall() {
+  if (PREVIEW) return Math.floor(Date.now() / 1000);
+  const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  // 呼び出しごとの番号。「向かいます」でこの番号の通知を全端末から消す
+  const seq = 'call' + Date.now();
+  const r = await fetch(NTFY + '/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      topic: C.topic,
+      sequence_id: seq,
+      title: `${C.place}から呼び出しです`,
+      message: `${C.clinicName}の${C.place}で、スタッフが呼ばれています（${time}）`,
+      priority: 5,
+      tags: ['bell'],
+      actions: [{ action: 'http', label: '向かいます', url: `${NTFY}/${C.topic}/${seq}/clear`, method: 'PUT', clear: true }]
+    })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json().catch(() => ({}));
+  return j.time || Math.floor(Date.now() / 1000) - 5;
+}
+function listenAck(since, onAck) {
+  if (PREVIEW) { const t = setTimeout(onAck, 6000); return { close() { clearTimeout(t) } } }
+  // 通知が「既読（消去）」になる＝誰かが「向かいます」を押した。PC画面からの返事は -ack に届く
+  const es = new EventSource(`${NTFY}/${encodeURIComponent(C.topic)},${encodeURIComponent(C.topic)}-ack/sse?since=${since}`);
+  es.onmessage = e => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.time < since) return;
+      if (m.topic === C.topic && (m.event === 'message_clear' || m.event === 'message_delete')) onAck();
+      else if (m.topic === C.topic + '-ack' && m.event === 'message') onAck();
+    } catch (x) {}
+  };
+  return es;
+}
+async function callStaff(force) {
+  show('calling'); acked = false;
+  setCall('send', 'スタッフを呼んでいます', 'そのまま少々お待ちください');
+  chime();
+  // 連打で通知が何度も飛ばないように
+  let since;
+  if (!force && Date.now() - lastSent < 30000) since = Math.floor(lastSent / 1000) - 5;
+  else {
+    try { since = await sendCall(); lastSent = Date.now() }
+    catch (e) {
+      setCall('error', 'スタッフを呼べませんでした', 'インターネットにつながっていない可能性があります。お近くのスタッフにお声がけください。');
+      speak('スタッフを呼べませんでした。お近くのスタッフにお声がけください。'); return;
+    }
+  }
+  if (cur !== 'calling') return;
+  setCall('sent', 'スタッフに知らせました', 'まもなくスタッフが参ります。そのまま少々お待ちください。');
+  speak('スタッフに知らせました。まもなくスタッフが参ります。そのまま少々お待ちください。');
+  stopListen();
+  listener = listenAck(since, () => {
+    if (acked || cur !== 'calling') return; acked = true;
+    stopListen(); chime(true);
+    setCall('ack', 'スタッフが向かっています', 'おかけになってお待ちください。');
+    speak('スタッフが向かっています。おかけになってお待ちください。');
+    lastAct = Date.now();
+  });
+  waitTimer = setTimeout(() => {
+    if (cur === 'calling' && !acked) {
+      setCall('wait', 'お待たせしています', 'もう一度呼ぶか、お近くのスタッフにお声がけください。');
+      speak('お待たせしています。'); lastAct = Date.now();
+    }
+  }, C.waitSeconds * 1000);
+}
+
+/* ---------- 操作 ---------- */
+document.addEventListener('pointerdown', () => { lastAct = Date.now() }, true);
+$('idle').addEventListener('click', () => { if (cur !== 'idle' || Date.now() < ignoreUntil) return; show('menu'); speak('いらっしゃいませ。ご用件をえらんでください。') });
+document.addEventListener('click', e => {
+  const it = e.target.closest('.item[data-i]');
+  if (it) { const m = C.menu[+it.dataset.i]; m.type === 'call' ? callStaff() : openGuide(m); return }
+  if (e.target.closest('[data-call]')) { callStaff(); return }
+  const g = e.target.closest('[data-go]'); if (g) show(g.dataset.go);
+});
+$('readBtn').addEventListener('click', readGuide);
+$('againBtn').addEventListener('click', () => callStaff(true));
+$('closeBtn').addEventListener('click', () => show('idle'));
+$('voiceBtn').addEventListener('click', () => { voice = !voice; $('voiceBtn').textContent = voice ? '音声 オン' : '音声 オフ'; if (!voice) try { speechSynthesis.cancel() } catch (e) {} });
+
+/* ---------- 設定画面 ---------- */
+let draft = null, longT = null, justLong = false, ignoreUntil = 0;
+const stepsToText = st => (st || []).map(x => [x.h + (x.d ? '|' + x.d : ''), ...(x.list || []).map(y => '・' + y)].join('\n')).join('\n');
+function textToSteps(t) {
+  const out = [];
+  String(t).split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+    if (/^[・\-－*]/.test(l) && out.length) (out[out.length - 1].list ||= []).push(l.replace(/^[・\-－*]\s*/, ''));
+    else { const i = l.search(/[|｜]/); out.push(i < 0 ? { h: l, d: '' } : { h: l.slice(0, i).trim(), d: l.slice(i + 1).trim() }) }
+  });
+  return out;
+}
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 2400) }
+function openAdmin() {
+  draft = JSON.parse(JSON.stringify(C));
+  $('aName').value = draft.clinicName || ''; $('aPlace').value = draft.place || '';
+  $('aTopic').value = draft.topic || ''; $('aIdle').value = draft.idleSeconds; $('aWait').value = draft.waitSeconds;
+  $('aPin').value = draft.pin || '';
+  renderMenuEd(); show('admin');
+}
+function renderMenuEd() {
+  const n = draft.menu.length;
+  $('aMenu').innerHTML = draft.menu.map((m, i) => `<div class="ed">
+    <div class="ed-h"><b>${i + 1}．${m.type === 'call' ? 'スタッフ呼び出し' : '案内'}</b>
+      <button class="sbtn" data-mv="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="上へ">↑</button>
+      <button class="sbtn" data-mv="${i}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="下へ">↓</button>
+      ${m.type === 'guide' ? `<button class="sbtn del" data-del="${i}">削除</button>` : ''}</div>
+    <div class="row2">
+      <label class="fl">ボタンの文字<input data-i="${i}" data-k="title" value="${esc(m.title)}"></label>
+      <label class="fl">ボタンの小さい説明<input data-i="${i}" data-k="sub" value="${esc(m.sub)}"></label>
+    </div>
+    ${m.type === 'guide' ? `<label class="fl">手順<textarea class="tall" data-i="${i}" data-k="steps">${esc(stepsToText(m.steps))}</textarea></label>
+    <label class="fl">注意書き（空欄なら表示しません）<input data-i="${i}" data-k="note" value="${esc(m.note)}"></label>` : ''}
+  </div>`).join('');
+}
+$('aMenu').addEventListener('input', e => {
+  const el = e.target.closest('[data-k]'); if (!el) return;
+  const m = draft.menu[+el.dataset.i]; m[el.dataset.k] = el.dataset.k === 'steps' ? textToSteps(el.value) : el.value;
+});
+$('aMenu').addEventListener('click', e => {
+  const mv = e.target.closest('[data-mv]'), del = e.target.closest('[data-del]');
+  if (mv) { const i = +mv.dataset.mv, j = i + +mv.dataset.d; [draft.menu[i], draft.menu[j]] = [draft.menu[j], draft.menu[i]]; renderMenuEd() }
+  if (del) { const i = +del.dataset.del; if (del.dataset.sure) { draft.menu.splice(i, 1); renderMenuEd() } else { del.dataset.sure = '1'; del.textContent = 'もう一度押すと削除' } }
+});
+$('aAdd').addEventListener('click', () => {
+  draft.menu.splice(Math.max(0, draft.menu.length - 1), 0, { type: 'guide', title: '新しい案内', sub: '', steps: [{ h: 'おかけになってお待ちください', d: '' }], note: '' });
+  renderMenuEd(); toast('追加しました。内容を入力して保存してください');
+});
+$('aSave').addEventListener('click', () => {
+  const topic = $('aTopic').value.trim();
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(topic)) { toast('チャンネル名は英数字・-・_ の6文字以上にしてください'); return }
+  draft.clinicName = $('aName').value.trim() || BASE.clinicName;
+  draft.place = $('aPlace').value.trim() || BASE.place;
+  draft.topic = topic;
+  draft.idleSeconds = Math.min(600, Math.max(15, parseInt($('aIdle').value, 10) || BASE.idleSeconds));
+  draft.waitSeconds = Math.min(900, Math.max(30, parseInt($('aWait').value, 10) || BASE.waitSeconds));
+  draft.pin = $('aPin').value.trim();
+  draft.menu.forEach(m => { if (!m.title) m.title = '（名前なし）' });
+  C = draft; draft = JSON.parse(JSON.stringify(C)); render();
+  try { localStorage.setItem(SKEY, JSON.stringify(C)); toast('保存しました') }
+  catch (e) { toast('この端末では保存できませんでした（今だけ反映）') }
+  $('aExport').value = exportText();
+});
+$('aReset').addEventListener('click', e => {
+  const b = e.currentTarget;
+  if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'もう一度押すと元に戻します'; return }
+  delete b.dataset.sure; b.textContent = '初期設定に戻す';
+  try { localStorage.removeItem(SKEY) } catch (x) {}
+  C = BASE; render(); openAdmin(); toast('config.js の内容に戻しました');
+});
+const exportText = () => 'window.KIOSK_CONFIG = ' + JSON.stringify(Object.assign({}, C, { pin: undefined }), null, 2) + ';\n';
+$('aExport').value = exportText();
+$('aCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('aExport').value); toast('コピーしました') } catch (e) { $('aExport').select(); toast('選択した文字をコピーしてください') } });
+$('admClose').addEventListener('click', () => show('idle'));
+function askPin() {
+  if (!C.pin) { openAdmin(); return }
+  $('pinIn').value = ''; show('pinbox'); setTimeout(() => $('pinIn').focus(), 50);
+}
+$('pinOk').addEventListener('click', () => { if ($('pinIn').value === C.pin) openAdmin(); else { toast('暗証番号がちがいます'); $('pinIn').value = '' } });
+$('pinIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('pinOk').click() });
+$('pinNo').addEventListener('click', () => show('idle'));
+// クリニック名を3秒長押しで設定画面
+['idleName', 'menuName'].forEach(id => {
+  const el = $(id);
+  el.addEventListener('pointerdown', () => { clearTimeout(longT); longT = setTimeout(() => { justLong = true; askPin() }, 3000) });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, () => { clearTimeout(longT); if (justLong) { justLong = false; ignoreUntil = Date.now() + 500 } }));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+/* ---------- 時計・自動で戻る ---------- */
+function tick() {
+  const d = new Date();
+  $('clock').textContent = d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  $('date').textContent = d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'long' });
+  let limit = C.idleSeconds;
+  if (cur === 'calling') limit = { ack: 20, wait: 90, error: 60 }[callState] || 0; // 呼び出し中は戻らない
+  if (cur === 'admin') limit = 0;
+  if (cur === 'pinbox') limit = 60;
+  if (cur !== 'idle' && limit > 0) {
+    const left = Math.max(0, Math.ceil((limit * 1000 - (Date.now() - lastAct)) / 1000));
+    const t = cur !== 'calling' && left <= 15 ? `あと${left}秒で最初の画面に戻ります` : '';
+    $('t1').textContent = t; $('t2').textContent = t;
+    if (left <= 0) show('idle');
+  }
+}
+setInterval(tick, 1000); tick();
+
+async function keepAwake() { try { await navigator.wakeLock.request('screen') } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake() });
+keepAwake();
+try { speechSynthesis.getVoices() } catch (e) {}
+}
+</script>
+</body>
+</html>

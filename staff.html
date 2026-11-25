@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>受付呼び出し（スタッフ用）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+body{overflow:auto;user-select:auto;-webkit-user-select:auto;font-size:18px}
+.wrap{max-width:780px;margin:0 auto;width:100%}
+.status{display:flex;align-items:center;gap:14px;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:18px 22px;font-weight:700}
+.dot{width:16px;height:16px;border-radius:50%;background:#b9b2a3;flex:none}
+.dot.ok{background:#2e9d5c;box-shadow:0 0 0 6px rgba(46,157,92,.18)}
+.hint{color:var(--sub);font-size:16px}
+.box{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:20px 24px;margin-top:20px}
+.box h2{font-size:20px;margin:0 0 8px}
+.box ol{margin:8px 0 0;padding-left:1.4em}
+.topic{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.topic code{font-size:18px;background:var(--bg);padding:8px 14px;border-radius:10px;border:2px solid var(--line);overflow-wrap:anywhere}
+.f{display:grid;gap:6px;margin:16px 0}
+.f input{font:inherit;font-size:18px;padding:12px 14px;border-radius:12px;border:2px solid var(--line);max-width:320px}
+#incoming{background:var(--coral);color:#fff}
+#incoming .center p{color:#ffe6de}
+#incoming .ring{background:#fff;color:var(--coral)}
+.log{list-style:none;padding:0;margin:8px 0 0;font-size:17px}
+.log li{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.log time{font-variant-numeric:tabular-nums;color:var(--sub);white-space:nowrap}
+</style>
+</head>
+<body>
+
+<section id="start" class="screen on">
+  <header><h1>受付呼び出し（スタッフ用）</h1></header>
+  <main><div class="wrap">
+    <p class="lead" id="clinic"></p>
+    <div class="box">
+      <h2>PCで受け取る（このページ）</h2>
+      <p>この画面を開いたままにしておくと、受付で「スタッフを呼ぶ」が押されたときに呼び出し音が鳴り、通知が出ます。</p>
+      <div class="f"><label for="nm">名前（「○○が向かいます」の表示に使います・省略可）</label><input id="nm" maxlength="12"></div>
+      <button class="big-btn primary" id="startBtn">待ち受けをはじめる</button>
+    </div>
+    <div class="box">
+      <h2>スマホで受け取る（ntfy アプリ）</h2>
+      <ol>
+        <li>App Store / Google Play で「ntfy」をインストール</li>
+        <li>「＋」を押して、次のトピック名を登録</li>
+      </ol>
+      <div class="topic"><code id="topicName"></code><button class="hbtn" id="copyBtn">コピー</button></div>
+      <p class="hint">通知の「向かいます」を押すと、受付の画面に「スタッフが向かっています」と表示されます。</p>
+    </div>
+  </div></main>
+</section>
+
+<section id="wait" class="screen">
+  <header><h1>受付呼び出し（スタッフ用）</h1></header>
+  <main><div class="wrap">
+    <div class="status"><span class="dot" id="dot"></span><span id="stat">接続中…</span></div>
+    <p class="hint">このタブを閉じたり、PCがスリープすると呼び出しを受け取れません。</p>
+    <h2 style="font-size:22px;margin-top:32px">今日の呼び出し</h2>
+    <ul class="log" id="log"><li class="hint">まだありません</li></ul>
+  </div></main>
+</section>
+
+<section id="incoming" class="screen">
+  <div class="center">
+    <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></div>
+    <h2 id="inTitle">受付から呼び出しです</h2>
+    <p id="inText"></p>
+    <div class="actions">
+      <button class="big-btn green" id="goBtn">向かいます</button>
+      <button class="big-btn" id="muteBtn">音を止める</button>
+    </div>
+  </div>
+</section>
+
+<script src="config.js"></script>
+<script>
+{
+const C = window.KIOSK_CONFIG;
+const NTFY = 'https://ntfy.sh';
+const T = C.topic, ACK = C.topic + '-ack';
+const $ = id => document.getElementById(id);
+let es = null, ringing = false, origTitle = document.title, notif = null, curSeq = '';
+$('clinic').textContent = C.clinicName; $('topicName').textContent = T;
+try { $('nm').value = localStorage.getItem('kioskStaffName') || '' } catch (e) {}
+
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)) }
+const hm = () => new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+const log = [];
+function addLog(t) {
+  log.unshift({ at: hm(), t }); $('log').innerHTML = '';
+  log.slice(0, 40).forEach(x => { const li = document.createElement('li'), tm = document.createElement('time'); tm.textContent = x.at; li.append(tm, document.createTextNode(x.t)); $('log').append(li) });
+}
+
+/* 呼び出し音 */
+let actx = null, ringT = null;
+function beep() {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    [[988, 0], [784, .25], [988, .5]].forEach(([f, t]) => {
+      const o = actx.createOscillator(), g = actx.createGain(), n = actx.currentTime + t;
+      o.frequency.value = f; g.gain.setValueAtTime(0, n); g.gain.linearRampToValueAtTime(.35, n + .02); g.gain.exponentialRampToValueAtTime(.001, n + .4);
+      o.connect(g).connect(actx.destination); o.start(n); o.stop(n + .45);
+    });
+  } catch (e) {}
+}
+function ringOn() { ringOff(); beep(); ringT = setInterval(() => { beep(); document.title = document.title === origTitle ? '🔔 受付から呼び出し' : origTitle }, 1500) }
+function ringOff() { if (ringT) { clearInterval(ringT); ringT = null } document.title = origTitle }
+
+function incoming(m) {
+  ringing = true; curSeq = m.sequence_id || m.id || '';
+  $('inTitle').textContent = m.title || '受付から呼び出しです';
+  $('inText').textContent = m.message || '';
+  $('goBtn').disabled = false; show('incoming'); ringOn(); addLog(m.title || '受付から呼び出し');
+  try {
+    if (Notification.permission === 'granted') {
+      notif = new Notification(m.title || '受付から呼び出しです', { body: m.message || '', requireInteraction: true });
+      notif.onclick = () => { window.focus(); notif.close() };
+    }
+  } catch (e) {}
+}
+function done(text) {
+  ringing = false; ringOff(); try { notif && notif.close() } catch (e) {}
+  if (text) addLog(text); show('wait');
+}
+
+function connect() {
+  if (es) es.close();
+  es = new EventSource(`${NTFY}/${encodeURIComponent(T)},${encodeURIComponent(ACK)}/sse`);
+  es.onopen = () => { $('dot').classList.add('ok'); $('stat').textContent = '待ち受け中' };
+  es.onerror = () => { $('dot').classList.remove('ok'); $('stat').textContent = '再接続中…（自動でつなぎ直します）' };
+  es.onmessage = e => {
+    let m; try { m = JSON.parse(e.data) } catch (x) { return }
+    if (m.topic === T && m.event === 'message') incoming(m);
+    else if (m.topic === T && (m.event === 'message_clear' || m.event === 'message_delete')) { if (ringing) done('他のスタッフ（スマホ）が応答') }
+    else if (m.topic === ACK && m.event === 'message') { if (ringing) done(m.message || '他のスタッフが応答') }
+  };
+}
+
+$('startBtn').addEventListener('click', async () => {
+  beep(); // 音を鳴らせるようにする
+  try { localStorage.setItem('kioskStaffName', $('nm').value.trim()) } catch (e) {}
+  try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission() } catch (e) {}
+  show('wait'); connect();
+  try { await navigator.wakeLock.request('screen') } catch (e) {}
+});
+$('goBtn').addEventListener('click', async () => {
+  $('goBtn').disabled = true; ringOff();
+  const name = $('nm').value.trim();
+  try {
+    // 全員のスマホから呼び出し通知を消す
+    if (curSeq) fetch(`${NTFY}/${encodeURIComponent(T)}/${encodeURIComponent(curSeq)}/clear`).catch(() => {});
+    // 受付とほかのPCに「向かいます」を知らせる
+    await fetch(`${NTFY}/${encodeURIComponent(ACK)}`, { method: 'POST', body: (name ? name + 'が' : '') + '向かいます' });
+  }
+  catch (e) { $('inText').textContent = '送信できませんでした。受付へ向かってください。'; return }
+  done((name ? name + 'が' : '') + '向かいます');
+});
+$('muteBtn').addEventListener('click', ringOff);
+$('copyBtn').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(T); $('copyBtn').textContent = 'コピーしました' } catch (e) { $('copyBtn').textContent = '長押しでコピーしてください' }
+});
+}
+</script>
+</body>
+</html>
