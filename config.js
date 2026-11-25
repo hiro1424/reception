@@ -13,6 +13,9 @@ window.KIOSK_CONFIG = {
   // 操作がないとき最初の画面に戻るまでの秒数
   idleSeconds: 90,
 
+  // 待機画面をタップしたら全画面にする（Safari で開いているとき）
+  autoFullscreen: true,
+
   // 読み上げの声（name を空にすると、自然な女性の声を自動で選びます）
   //   rate: 速さ（1が標準）／ pitch: 高さ（1が標準、上げると若く明るい声に）
   voice: { name: '', rate: 0.95, pitch: 1.1 },

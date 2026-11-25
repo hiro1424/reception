@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="受付ご案内">
 <title>受付ご案内</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
@@ -43,6 +47,8 @@
 .fl{display:grid;gap:6px;margin-bottom:16px;font-size:17px;font-weight:700}
 .fl input,.fl textarea{font-family:inherit;font-size:17px;line-height:1.6;font-weight:500;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%}
 .fl textarea{min-height:110px;resize:vertical}
+.chk{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:700;min-height:44px;margin-top:4px}
+.chk input{width:26px;height:26px;accent-color:var(--blue);flex:none}
 .fl select{font-family:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%;min-height:52px}
 .fl input[type=range]{padding:0;border:0;background:none;accent-color:var(--blue);min-height:44px}
 .fl textarea.tall{min-height:260px}
@@ -118,6 +124,8 @@
       <label class="fl">「もう一度呼ぶ」を出すまで（秒）<input id="aWait" type="number" inputmode="numeric" min="30" max="900"></label>
       <label class="fl">設定画面の暗証番号（空欄なら不要）<input id="aPin" inputmode="numeric" maxlength="8" autocomplete="off"></label>
     </div>
+    <label class="chk"><input type="checkbox" id="aFull"> 待機画面をタップしたら全画面にする（Safari で開いているとき）</label>
+    <div class="actions" style="margin-top:8px"><button class="sbtn" id="aFullNow">今すぐ全画面にする</button></div>
     <h2>読み上げの声</h2>
     <p class="hint">選べる声は端末によって違います。「（拡張）」「Premium」と付いた声は、より自然です。</p>
     <label class="fl">声<select id="aVoice"></select></label>
@@ -319,7 +327,16 @@ async function callStaff(force) {
 
 /* ---------- 操作 ---------- */
 document.addEventListener('pointerdown', () => { lastAct = Date.now() }, true);
-$('idle').addEventListener('click', () => { if (cur !== 'idle' || Date.now() < ignoreUntil) return; show('menu'); speak('いらっしゃいませ。ご用件をえらんでください。') });
+/* 全画面表示（Safari のタブで開いているとき用。タップしたときにしか全画面にできない） */
+const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true } catch (e) { return false } };
+const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function goFull() {
+  if (isFull() || isStandalone()) return true;
+  const r = document.documentElement, f = r.requestFullscreen || r.webkitRequestFullscreen;
+  if (!f) return false;
+  try { const p = f.call(r); if (p && p.catch) p.catch(() => {}); return true } catch (e) { return false }
+}
+$('idle').addEventListener('click', () => { if (cur !== 'idle' || Date.now() < ignoreUntil) return; if (C.autoFullscreen !== false) goFull(); show('menu'); speak('いらっしゃいませ。ご用件をえらんでください。') });
 document.addEventListener('click', e => {
   const it = e.target.closest('.item[data-i]');
   if (it) { const m = C.menu[+it.dataset.i]; m.type === 'call' ? callStaff() : openGuide(m); return }
@@ -348,6 +365,7 @@ function openAdmin() {
   $('aName').value = draft.clinicName || ''; $('aPlace').value = draft.place || '';
   $('aTopic').value = draft.topic || ''; $('aIdle').value = draft.idleSeconds; $('aWait').value = draft.waitSeconds;
   $('aPin').value = draft.pin || '';
+  $('aFull').checked = draft.autoFullscreen !== false;
   draft.voice = Object.assign({ name: '', rate: 0.95, pitch: 1.1 }, draft.voice || {});
   fillVoices(); $('aRate').value = draft.voice.rate; $('aPitch').value = draft.voice.pitch; showVoiceVals();
   renderMenuEd(); show('admin');
@@ -406,6 +424,7 @@ $('aSave').addEventListener('click', () => {
   draft.idleSeconds = Math.min(600, Math.max(15, parseInt($('aIdle').value, 10) || BASE.idleSeconds));
   draft.waitSeconds = Math.min(900, Math.max(30, parseInt($('aWait').value, 10) || BASE.waitSeconds));
   draft.pin = $('aPin').value.trim();
+  draft.autoFullscreen = $('aFull').checked;
   draft.voice = { name: $('aVoice').value, rate: +$('aRate').value, pitch: +$('aPitch').value };
   draft.menu.forEach(m => { if (!m.title) m.title = '（名前なし）' });
   C = draft; draft = JSON.parse(JSON.stringify(C)); render();
@@ -424,6 +443,10 @@ const exportText = () => 'window.KIOSK_CONFIG = ' + JSON.stringify(Object.assign
 $('aExport').value = exportText();
 $('aCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('aExport').value); toast('コピーしました') } catch (e) { $('aExport').select(); toast('選択した文字をコピーしてください') } });
 $('admClose').addEventListener('click', () => show('idle'));
+$('aFullNow').addEventListener('click', () => {
+  if (isStandalone()) { toast('ホーム画面から開いているので、すでに全画面です'); return }
+  if (!goFull()) toast('この端末では全画面にできませんでした');
+});
 function askPin() {
   if (!C.pin) { openAdmin(); return }
   $('pinIn').value = ''; show('pinbox'); setTimeout(() => $('pinIn').focus(), 50);
