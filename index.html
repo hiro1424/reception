@@ -43,6 +43,8 @@
 .fl{display:grid;gap:6px;margin-bottom:16px;font-size:17px;font-weight:700}
 .fl input,.fl textarea{font-family:inherit;font-size:17px;line-height:1.6;font-weight:500;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%}
 .fl textarea{min-height:110px;resize:vertical}
+.fl select{font-family:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%;min-height:52px}
+.fl input[type=range]{padding:0;border:0;background:none;accent-color:var(--blue);min-height:44px}
 .fl textarea.tall{min-height:260px}
 .row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:0 16px}
 .ed{border:2px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:16px;background:var(--card)}
@@ -116,6 +118,14 @@
       <label class="fl">「もう一度呼ぶ」を出すまで（秒）<input id="aWait" type="number" inputmode="numeric" min="30" max="900"></label>
       <label class="fl">設定画面の暗証番号（空欄なら不要）<input id="aPin" inputmode="numeric" maxlength="8" autocomplete="off"></label>
     </div>
+    <h2>読み上げの声</h2>
+    <p class="hint">選べる声は端末によって違います。「（拡張）」「Premium」と付いた声は、より自然です。</p>
+    <label class="fl">声<select id="aVoice"></select></label>
+    <div class="row2">
+      <label class="fl">速さ <span id="aRateV"></span><input id="aRate" type="range" min="0.7" max="1.3" step="0.05"></label>
+      <label class="fl">高さ <span id="aPitchV"></span><input id="aPitch" type="range" min="0.8" max="1.5" step="0.05"></label>
+    </div>
+    <div class="actions" style="margin-top:0"><button class="sbtn" id="aTry">▶ 試しに聞く</button></div>
     <h2>メニュー</h2>
     <p class="hint">手順は1行に1つ。「見出し|説明」と書くと説明を分けられます。行の頭に「・」を付けると、すぐ上の手順の一覧（金属類など）になります。</p>
     <div id="aMenu"></div>
@@ -165,12 +175,26 @@ function show(id) {
   if (id !== 'calling') stopListen();
   if (id === 'idle') { try { speechSynthesis.cancel() } catch (e) {} }
 }
-function speak(t) {
-  if (!voice || !t) return;
+/* 声の選び方：高品質（拡張・Premium・Natural）で、女性の日本語の声を優先 */
+const FEMALE = /kyoko|o-?ren|nanami|mayu|ayumi|haruka|sayaka|aoi|shiori|google 日本語|女性|female/i;
+const MALE = /otoya|hattori|keita|ichiro|daichi|naoki|男性|male/i;
+const GOOD = /enhanced|premium|natural|neural|拡張|高品質/i;
+function jaVoices() { try { return speechSynthesis.getVoices().filter(v => (v.lang || '').replace('_', '-').toLowerCase().startsWith('ja')) } catch (e) { return [] } }
+function pickVoice() {
+  const vs = jaVoices(); if (!vs.length) return null;
+  const want = (C.voice || {}).name;
+  if (want) { const v = vs.find(v => v.name === want); if (v) return v }
+  const score = v => (GOOD.test(v.name) ? 4 : 0) + (FEMALE.test(v.name) ? 3 : 0) - (MALE.test(v.name) && !FEMALE.test(v.name) ? 5 : 0) + (v.localService ? 0 : 1);
+  return vs.slice().sort((a, b) => score(b) - score(a))[0];
+}
+function speak(t, force) {
+  if ((!voice && !force) || !t) return;
   try {
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP'; u.rate = .92;
-    const v = speechSynthesis.getVoices().find(v => (v.lang || '').startsWith('ja')); if (v) u.voice = v;
+    const vc = C.voice || {};
+    const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP';
+    u.rate = +vc.rate || 0.95; u.pitch = +vc.pitch || 1.1; u.volume = 1;
+    const v = pickVoice(); if (v) u.voice = v;
     speechSynthesis.speak(u);
   } catch (e) {}
 }
@@ -324,6 +348,8 @@ function openAdmin() {
   $('aName').value = draft.clinicName || ''; $('aPlace').value = draft.place || '';
   $('aTopic').value = draft.topic || ''; $('aIdle').value = draft.idleSeconds; $('aWait').value = draft.waitSeconds;
   $('aPin').value = draft.pin || '';
+  draft.voice = Object.assign({ name: '', rate: 0.95, pitch: 1.1 }, draft.voice || {});
+  fillVoices(); $('aRate').value = draft.voice.rate; $('aPitch').value = draft.voice.pitch; showVoiceVals();
   renderMenuEd(); show('admin');
 }
 function renderMenuEd() {
@@ -341,6 +367,23 @@ function renderMenuEd() {
     <label class="fl">注意書き（空欄なら表示しません）<input data-i="${i}" data-k="note" value="${esc(m.note)}"></label>` : ''}
   </div>`).join('');
 }
+function fillVoices() {
+  const vs = jaVoices(), cur = (draft && draft.voice && draft.voice.name) || '';
+  const auto = pickVoice.call(null);
+  $('aVoice').innerHTML = '';
+  const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '自動（おすすめ）' + (auto ? '：' + auto.name : ''); $('aVoice').append(o0);
+  vs.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name; $('aVoice').append(o) });
+  if (!vs.length) { const o = document.createElement('option'); o.disabled = true; o.textContent = '日本語の声が見つかりません'; $('aVoice').append(o) }
+  $('aVoice').value = vs.some(v => v.name === cur) ? cur : '';
+}
+function showVoiceVals() { $('aRateV').textContent = (+$('aRate').value).toFixed(2); $('aPitchV').textContent = (+$('aPitch').value).toFixed(2) }
+['aRate', 'aPitch'].forEach(id => $(id).addEventListener('input', showVoiceVals));
+$('aTry').addEventListener('click', () => {
+  const keep = C.voice; C.voice = { name: $('aVoice').value, rate: +$('aRate').value, pitch: +$('aPitch').value };
+  speak('いらっしゃいませ。ご用件をえらんでください。スタッフが参りますので、おかけになってお待ちください。', true);
+  C.voice = keep;
+});
+try { speechSynthesis.addEventListener('voiceschanged', () => { if (cur === 'admin') fillVoices() }) } catch (e) {}
 $('aMenu').addEventListener('input', e => {
   const el = e.target.closest('[data-k]'); if (!el) return;
   const m = draft.menu[+el.dataset.i]; m[el.dataset.k] = el.dataset.k === 'steps' ? textToSteps(el.value) : el.value;
@@ -363,6 +406,7 @@ $('aSave').addEventListener('click', () => {
   draft.idleSeconds = Math.min(600, Math.max(15, parseInt($('aIdle').value, 10) || BASE.idleSeconds));
   draft.waitSeconds = Math.min(900, Math.max(30, parseInt($('aWait').value, 10) || BASE.waitSeconds));
   draft.pin = $('aPin').value.trim();
+  draft.voice = { name: $('aVoice').value, rate: +$('aRate').value, pitch: +$('aPitch').value };
   draft.menu.forEach(m => { if (!m.title) m.title = '（名前なし）' });
   C = draft; draft = JSON.parse(JSON.stringify(C)); render();
   try { localStorage.setItem(SKEY, JSON.stringify(C)); toast('保存しました') }
