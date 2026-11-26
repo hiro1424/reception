@@ -47,6 +47,7 @@
 .fl{display:grid;gap:6px;margin-bottom:16px;font-size:17px;font-weight:700}
 .fl input,.fl textarea{font-family:inherit;font-size:17px;line-height:1.6;font-weight:500;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%}
 .fl textarea{min-height:110px;resize:vertical}
+.sprow{display:flex;gap:10px;align-items:stretch}.sprow textarea{min-height:64px;flex:1}.sprow .sbtn{flex:none}
 .chk{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:700;min-height:44px;margin-top:4px}
 .chk input{width:26px;height:26px;accent-color:var(--blue);flex:none}
 .fl select{font-family:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);width:100%;min-height:52px}
@@ -134,6 +135,9 @@
       <label class="fl">高さ <span id="aPitchV"></span><input id="aPitch" type="range" min="0.8" max="1.5" step="0.05"></label>
     </div>
     <div class="actions" style="margin-top:0"><button class="sbtn" id="aTry">▶ 試しに聞く</button></div>
+    <h2>読み上げる言葉</h2>
+    <p class="hint">空欄にすると、その場面では読み上げません。画面に出る文字は変わりません。</p>
+    <div id="aSpeech"></div>
     <h2>メニュー</h2>
     <p class="hint">手順は1行に1つ。「見出し|説明」と書くと説明を分けられます。行の頭に「・」を付けると、すぐ上の手順の一覧（金属類など）になります。</p>
     <div id="aMenu"></div>
@@ -206,6 +210,23 @@ function speak(t, force) {
     speechSynthesis.speak(u);
   } catch (e) {}
 }
+/* 読み上げる言葉（設定画面で変更できる。空欄なら読み上げない） */
+const SPEECH_DEFAULT = {
+  welcome: 'いらっしゃいませ。ご用件をえらんでください。',
+  callSent: 'スタッフに知らせました。まもなくスタッフが参ります。そのまま少々お待ちください。',
+  callAck: 'スタッフが向かっています。おかけになってお待ちください。',
+  callWait: 'お待たせしています。',
+  callError: 'スタッフを呼べませんでした。お近くのスタッフにお声がけください。'
+};
+const SPEECH_LABEL = {
+  welcome: '最初のあいさつ（待機画面をタップしたとき）',
+  callSent: 'スタッフに通知を送ったとき',
+  callAck: 'スタッフが「向かいます」を押したとき',
+  callWait: 'しばらく応答がないとき',
+  callError: '通知を送れなかったとき'
+};
+const phrase = k => { const sp = C.speech || {}; return k in sp ? sp[k] : SPEECH_DEFAULT[k] };
+const say = k => speak(phrase(k));
 let actx = null;
 function chime(done) {
   try {
@@ -236,13 +257,16 @@ function openGuide(m) {
     <div><b>${esc(s.h)}</b>${s.d ? `<p>${esc(s.d)}</p>` : ''}
     ${s.list ? `<ul class="metal">${s.list.map(x => `<li>${NO}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></li>`).join('');
   $('gNoteText').textContent = m.note || ''; $('gNote').style.display = m.note ? '' : 'none';
+  $('readBtn').hidden = m.speakOn === false;
   show('guide'); readGuide();
 }
-function readGuide() {
-  const m = curGuide; if (!m) return;
-  speak(m.title + 'へのご案内です。' + (m.steps || []).map((s, k) =>
-    (k + 1) + '。' + s.h + '。' + (s.d || '') + (s.list ? s.list.join('、') + '。' : '')).join('') + (m.note || ''));
+function guideSpeech(m) {
+  if (m.speakOn === false) return '';
+  if (m.speakText && m.speakText.trim()) return m.speakText.trim();
+  return m.title + 'へのご案内です。' + (m.steps || []).map((s, k) =>
+    (k + 1) + '。' + s.h + '。' + (s.d || '') + (s.list ? s.list.join('、') + '。' : '')).join('') + (m.note || '');
 }
+function readGuide() { const m = curGuide; if (m) speak(guideSpeech(m)) }
 
 /* ---------- スタッフ呼び出し（ntfy） ---------- */
 let listener = null, waitTimer = null, lastSent = 0, acked = false, callState = '';
@@ -303,24 +327,24 @@ async function callStaff(force) {
     try { since = await sendCall(); lastSent = Date.now() }
     catch (e) {
       setCall('error', 'スタッフを呼べませんでした', 'インターネットにつながっていない可能性があります。お近くのスタッフにお声がけください。');
-      speak('スタッフを呼べませんでした。お近くのスタッフにお声がけください。'); return;
+      say('callError'); return;
     }
   }
   if (cur !== 'calling') return;
   setCall('sent', 'スタッフに知らせました', 'まもなくスタッフが参ります。そのまま少々お待ちください。');
-  speak('スタッフに知らせました。まもなくスタッフが参ります。そのまま少々お待ちください。');
+  say('callSent');
   stopListen();
   listener = listenAck(since, () => {
     if (acked || cur !== 'calling') return; acked = true;
     stopListen(); chime(true);
     setCall('ack', 'スタッフが向かっています', 'おかけになってお待ちください。');
-    speak('スタッフが向かっています。おかけになってお待ちください。');
+    say('callAck');
     lastAct = Date.now();
   });
   waitTimer = setTimeout(() => {
     if (cur === 'calling' && !acked) {
       setCall('wait', 'お待たせしています', 'もう一度呼ぶか、お近くのスタッフにお声がけください。');
-      speak('お待たせしています。'); lastAct = Date.now();
+      say('callWait'); lastAct = Date.now();
     }
   }, C.waitSeconds * 1000);
 }
@@ -336,7 +360,7 @@ function goFull() {
   if (!f) return false;
   try { const p = f.call(r); if (p && p.catch) p.catch(() => {}); return true } catch (e) { return false }
 }
-$('idle').addEventListener('click', () => { if (cur !== 'idle' || Date.now() < ignoreUntil) return; if (C.autoFullscreen !== false) goFull(); show('menu'); speak('いらっしゃいませ。ご用件をえらんでください。') });
+$('idle').addEventListener('click', () => { if (cur !== 'idle' || Date.now() < ignoreUntil) return; if (C.autoFullscreen !== false) goFull(); show('menu'); say('welcome') });
 document.addEventListener('click', e => {
   const it = e.target.closest('.item[data-i]');
   if (it) { const m = C.menu[+it.dataset.i]; m.type === 'call' ? callStaff() : openGuide(m); return }
@@ -367,6 +391,7 @@ function openAdmin() {
   $('aPin').value = draft.pin || '';
   $('aFull').checked = draft.autoFullscreen !== false;
   draft.voice = Object.assign({ name: '', rate: 0.95, pitch: 1.1 }, draft.voice || {});
+  draft.speech = Object.assign({}, SPEECH_DEFAULT, draft.speech || {}); renderSpeechEd();
   fillVoices(); $('aRate').value = draft.voice.rate; $('aPitch').value = draft.voice.pitch; showVoiceVals();
   renderMenuEd(); show('admin');
 }
@@ -382,7 +407,10 @@ function renderMenuEd() {
       <label class="fl">ボタンの小さい説明<input data-i="${i}" data-k="sub" value="${esc(m.sub)}"></label>
     </div>
     ${m.type === 'guide' ? `<label class="fl">手順<textarea class="tall" data-i="${i}" data-k="steps">${esc(stepsToText(m.steps))}</textarea></label>
-    <label class="fl">注意書き（空欄なら表示しません）<input data-i="${i}" data-k="note" value="${esc(m.note)}"></label>` : ''}
+    <label class="fl">注意書き（空欄なら表示しません）<input data-i="${i}" data-k="note" value="${esc(m.note)}"></label>
+    <label class="chk"><input type="checkbox" data-i="${i}" data-k="speakOn" ${m.speakOn === false ? '' : 'checked'}> この案内を読み上げる</label>
+    <label class="fl" style="margin-top:8px">読み上げる文（空欄なら、画面の内容をそのまま読み上げます）<textarea data-i="${i}" data-k="speakText" placeholder="例：MRI撮影の方へ。お手洗いを済ませ、金属類を外して、おかけになってお待ちください。">${esc(m.speakText || '')}</textarea></label>
+    <div class="actions" style="margin-top:0;justify-content:flex-start"><button class="sbtn" data-try="${i}">▶ この案内の読み上げを聞く</button></div>` : ''}
   </div>`).join('');
 }
 function fillVoices() {
@@ -394,19 +422,30 @@ function fillVoices() {
   if (!vs.length) { const o = document.createElement('option'); o.disabled = true; o.textContent = '日本語の声が見つかりません'; $('aVoice').append(o) }
   $('aVoice').value = vs.some(v => v.name === cur) ? cur : '';
 }
+function withDraftVoice(fn) {
+  const keep = C.voice; C.voice = { name: $('aVoice').value, rate: +$('aRate').value, pitch: +$('aPitch').value };
+  try { fn() } finally { C.voice = keep }
+}
+function renderSpeechEd() {
+  $('aSpeech').innerHTML = Object.keys(SPEECH_DEFAULT).map(k => `<label class="fl">${esc(SPEECH_LABEL[k])}
+    <span class="sprow"><textarea data-sp="${k}" rows="2">${esc(k in draft.speech ? draft.speech[k] : SPEECH_DEFAULT[k])}</textarea><button type="button" class="sbtn" data-sptry="${k}" aria-label="聞く">▶</button></span></label>`).join('');
+}
+$('aSpeech').addEventListener('input', e => { const t = e.target.closest('[data-sp]'); if (t) draft.speech[t.dataset.sp] = t.value });
+$('aSpeech').addEventListener('click', e => {
+  const b = e.target.closest('[data-sptry]'); if (!b) return; e.preventDefault();
+  const t = draft.speech[b.dataset.sptry]; withDraftVoice(() => t ? speak(t, true) : toast('空欄なので読み上げません'));
+});
 function showVoiceVals() { $('aRateV').textContent = (+$('aRate').value).toFixed(2); $('aPitchV').textContent = (+$('aPitch').value).toFixed(2) }
 ['aRate', 'aPitch'].forEach(id => $(id).addEventListener('input', showVoiceVals));
-$('aTry').addEventListener('click', () => {
-  const keep = C.voice; C.voice = { name: $('aVoice').value, rate: +$('aRate').value, pitch: +$('aPitch').value };
-  speak('いらっしゃいませ。ご用件をえらんでください。スタッフが参りますので、おかけになってお待ちください。', true);
-  C.voice = keep;
-});
+$('aTry').addEventListener('click', () => withDraftVoice(() => speak((draft.speech.welcome || SPEECH_DEFAULT.welcome) + (draft.speech.callAck || ''), true)));
 try { speechSynthesis.addEventListener('voiceschanged', () => { if (cur === 'admin') fillVoices() }) } catch (e) {}
 $('aMenu').addEventListener('input', e => {
   const el = e.target.closest('[data-k]'); if (!el) return;
-  const m = draft.menu[+el.dataset.i]; m[el.dataset.k] = el.dataset.k === 'steps' ? textToSteps(el.value) : el.value;
+  const m = draft.menu[+el.dataset.i], k = el.dataset.k; m[k] = k === 'steps' ? textToSteps(el.value) : k === 'speakOn' ? el.checked : el.value;
 });
 $('aMenu').addEventListener('click', e => {
+  const tr = e.target.closest('[data-try]');
+  if (tr) { const m = draft.menu[+tr.dataset.try]; withDraftVoice(() => { const t = guideSpeech(m); t ? speak(t, true) : toast('読み上げはオフになっています') }); return }
   const mv = e.target.closest('[data-mv]'), del = e.target.closest('[data-del]');
   if (mv) { const i = +mv.dataset.mv, j = i + +mv.dataset.d; [draft.menu[i], draft.menu[j]] = [draft.menu[j], draft.menu[i]]; renderMenuEd() }
   if (del) { const i = +del.dataset.del; if (del.dataset.sure) { draft.menu.splice(i, 1); renderMenuEd() } else { del.dataset.sure = '1'; del.textContent = 'もう一度押すと削除' } }
